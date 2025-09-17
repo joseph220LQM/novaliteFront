@@ -5,7 +5,11 @@ import App from "./App.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    {/* Elige: "chat" | "voice" | "both" */}
-    <App mode="both" />
+    <App
+      mode="both"
+      apiBase={import.meta.env.VITE_API_BASE}
+      wsPath={import.meta.env.VITE_WS_URL} // absoluto (wss://...)
+    />
   </StrictMode>
 );
+

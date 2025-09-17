@@ -1,10 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 
+// Une base + path garantizando un solo slash
+const joinURL = (base = "", path = "") =>
+  `${String(base).replace(/\/+$/, "")}/${String(path).replace(/^\/+/, "")}`;
+
 // App.jsx — FloatingAgendaWidget (Chat/Voz) con AudioWorklet, barge-in,
-// TTS controlado, estilos pulidos y fixes de scroll + reinicio en voz.
+// TTS controlado, estilos pulidos y fixes de scroll + URLs para Railway.
 export default function FloatingAgendaWidget({
   apiBase = import.meta?.env?.VITE_API_BASE ?? "http://localhost:4000",
-  wsPath = "",                         // ej: "/ws" si tu backend lo usa
+  wsPath = "",                         // puede ser absoluto "wss://..." o "/ws"
   mode = "both",                       // "chat" | "voice" | "both"
   clientId,                            // estable; si no llega, se guarda en localStorage
   // etiquetas
@@ -68,7 +72,7 @@ export default function FloatingAgendaWidget({
     setPrompt("");
     try {
       setLoading(true);
-      const res = await fetch(`${apiBase}/chat`, {
+      const res = await fetch(joinURL(apiBase, "/chat"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: userText }),
@@ -110,8 +114,7 @@ export default function FloatingAgendaWidget({
     el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // ⬇️ Nuevo: evita “saltos” mientras escribes.
-  // Si ya estás cerca del fondo, te mantiene abajo al escribir/abrir/cambiar tab.
+  // Evita “saltos” mientras escribes: si estás cerca del fondo, mantente abajo
   useEffect(() => {
     const el = chatBodyRef.current;
     if (!el) return;
@@ -127,13 +130,12 @@ export default function FloatingAgendaWidget({
   const audioRef = useRef(null);
   const ttsAbortRef = useRef(null);
 
-  // Construye ws/wss en base a http/https + wsPath
+  // Construye WS URL: si wsPath es absoluto (wss://...), úsalo tal cual.
+  // Si no, deriva de apiBase (http(s) -> ws(s)) y únelos de forma segura.
   const WS_URL = (() => {
-    let url = (apiBase || "").replace(/^http(s?):\/\//i, (_, s) => `ws${s ? "s" : ""}://`);
-    if (wsPath) {
-      url = url.replace(/\/+$/, "") + (wsPath.startsWith("/") ? wsPath : `/${wsPath}`);
-    }
-    return url;
+    if (wsPath && /^wss?:\/\//i.test(wsPath)) return wsPath;
+    const wsBase = String(apiBase || "").replace(/^http(s?):\/\//i, (_, s) => `ws${s ? "s" : ""}://`);
+    return joinURL(wsBase, wsPath || "/ws");
   })();
 
   const stopSpeak = async () => {
@@ -151,7 +153,7 @@ export default function FloatingAgendaWidget({
         if (a.src && a.src.startsWith("blob:")) URL.revokeObjectURL(a.src);
         a.src = "";
       } catch {}
-      fetch(`${apiBase}/speak/stop?clientId=${clientIdRef.current}`, { method: "POST" }).catch(()=>{});
+      fetch(joinURL(apiBase, "/speak/stop") + `?clientId=${clientIdRef.current}`, { method: "POST" }).catch(()=>{});
     } catch {}
   };
 
@@ -162,7 +164,7 @@ export default function FloatingAgendaWidget({
       if (!audioRef.current) audioRef.current = new Audio();
       const ctrl = new AbortController();
       ttsAbortRef.current = ctrl;
-      const res = await fetch(`${apiBase}/speak?clientId=${clientIdRef.current}`, {
+      const res = await fetch(joinURL(apiBase, "/speak") + `?clientId=${clientIdRef.current}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
@@ -359,7 +361,7 @@ export default function FloatingAgendaWidget({
     <>
       <Header
         title={chatTitle}
-        subtitle={"Chat activo"}
+        subtitle={chatSubtitle}
         rightExtra={
           <button
             onClick={resetChat}
@@ -510,5 +512,6 @@ export default function FloatingAgendaWidget({
     </div>
   );
 }
+
 
 
